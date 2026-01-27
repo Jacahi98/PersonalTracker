@@ -8,7 +8,7 @@ import 'package:csv/csv.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart' as p; // <--- CAMBIO AQUÍ: Le ponemos el apodo 'p'
+import 'package:path/path.dart' as p;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,7 +53,6 @@ class DB {
   }
 
   static Future<Database> _initDB() async {
-    // CAMBIO AQUÍ: Usamos p.join en vez de join a secas
     String path = p.join(await getDatabasesPath(), 'gastos_pro.db');
 
     return await openDatabase(
@@ -312,24 +311,46 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     _cargarGastos();
   }
 
-  Future<void> _exportarExcel() async {
+  // --- FUNCIÓN CORREGIDA PARA IOS ---
+ Future<void> _exportarExcel() async {
     try {
+      // 1. Crear datos
       List<List<dynamic>> rows = [];
       rows.add(["Fecha", "Categoría", "Concepto", "Monto"]);
       for (var gasto in _misGastos) {
-        rows.add([DateFormat('yyyy-MM-dd').format(gasto.fecha), gasto.categoria, gasto.titulo, gasto.monto]);
+        rows.add([
+          DateFormat('yyyy-MM-dd').format(gasto.fecha),
+          gasto.categoria,
+          gasto.titulo,
+          gasto.monto
+        ]);
       }
-
       String csvData = const ListToCsvConverter().convert(rows);
-      final directory = await getApplicationDocumentsDirectory();
-      String fechaHoy = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final path = "${directory.path}/Gastos_$fechaHoy.csv";
+
+      // 2. Guardar archivo
+      final directory = await getTemporaryDirectory();
+      final path = "${directory.path}/Gastos_${DateTime.now().millisecondsSinceEpoch}.csv";
       final file = File(path);
       await file.writeAsString(csvData);
+      
+      // Espera de seguridad
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Comprobamos que el archivo existe antes de compartir
+      if (!await file.exists()) {
+         throw "El archivo no se pudo guardar";
+      }
 
-      await Share.shareXFiles([XFile(path)], text: 'Aquí tienes el Excel de tus gastos.');
+      // 3. COMPARTIR CON ORIGEN (El truco para iOS)
+      final box = context.findRenderObject() as RenderBox?;
+      
+      await Share.shareXFiles(
+        [XFile(path)],
+        text: 'Mis Gastos Exportados',
+        sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size, // <--- ESTO ES VITAL EN IOS
+      );
+
     } catch (e) {
-      // ignore: use_build_context_synchronously
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
@@ -594,7 +615,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 BarChartData(
                   barTouchData: BarTouchData(
                     touchTooltipData: BarTouchTooltipData(
-                      tooltipBgColor: Colors.blueGrey,
+                      getTooltipColor: (group) => Colors.blueGrey,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         return BarTooltipItem('${rod.toY.toStringAsFixed(2)} €', const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
                       },
