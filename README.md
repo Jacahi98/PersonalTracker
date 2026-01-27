@@ -17,14 +17,6 @@ Una aplicación móvil moderna, rápida y eficiente para el seguimiento de finan
 * **📅 Calendario Inteligente:** Filtros de fecha avanzados y selector de rangos personalizado con soporte completo en español.
 * **🎨 UI/UX Moderna:** Diseño limpio basado en Material 3, tarjetas con sombras suaves y feedback visual.
 
-## 📱 Capturas de Pantalla
-
-| Pantalla Principal | Gráficas | Añadir Gasto |
-|:---:|:---:|:---:|
-| <img src="assets/screenshots/home.png" width="200" /> | <img src="assets/screenshots/chart.png" width="200" /> | <img src="assets/screenshots/add.png" width="200" /> |
-
-*(Nota: Sustituye estas rutas con tus propias capturas de pantalla)*
-
 ## 🛠️ Tecnologías y Librerías
 
 Este proyecto utiliza las siguientes dependencias clave:
