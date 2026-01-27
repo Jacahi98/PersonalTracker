@@ -311,13 +311,53 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     _cargarGastos();
   }
 
-  // --- FUNCIÓN CORREGIDA PARA IOS ---
- Future<void> _exportarExcel() async {
+  // --- FUNCIÓN DE EXPORTACIÓN CON FILTRO DE FECHAS ---
+  Future<void> _exportarExcel() async {
     try {
-      // 1. Crear datos
+      // 1. Pedir Rango de Fechas (CON LIBERTAD TOTAL)
+      final DateTimeRange? rango = await showDateRangePicker(
+        context: context,
+        // CAMBIO AQUÍ: Ampliamos los límites
+        firstDate: DateTime(2000),      // Desde el año 2000
+        lastDate: DateTime(2100),       // Hasta el año 2100 (sin límite de "hoy")
+        currentDate: DateTime.now(),
+        saveText: 'EXPORTAR',
+        helpText: 'SELECCIONA LAS FECHAS',
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+
+      // Si cancela, no hacemos nada
+      if (rango == null) return;
+
+      // 2. Filtrar
+      final fechaInicio = rango.start;
+      final fechaFin = rango.end.add(const Duration(hours: 23, minutes: 59, seconds: 59));
+
+      final gastosFiltrados = _misGastos.where((g) {
+        return g.fecha.isAfter(fechaInicio.subtract(const Duration(seconds: 1))) &&
+               g.fecha.isBefore(fechaFin);
+      }).toList();
+
+      if (gastosFiltrados.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No hay gastos en esas fechas para exportar.')),
+        );
+        return;
+      }
+
+      // 3. Crear CSV
       List<List<dynamic>> rows = [];
       rows.add(["Fecha", "Categoría", "Concepto", "Monto"]);
-      for (var gasto in _misGastos) {
+      for (var gasto in gastosFiltrados) {
         rows.add([
           DateFormat('yyyy-MM-dd').format(gasto.fecha),
           gasto.categoria,
@@ -325,29 +365,25 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           gasto.monto
         ]);
       }
+
       String csvData = const ListToCsvConverter().convert(rows);
 
-      // 2. Guardar archivo
+      // 4. Guardar
       final directory = await getTemporaryDirectory();
-      final path = "${directory.path}/Gastos_${DateTime.now().millisecondsSinceEpoch}.csv";
+      String nombreArchivo = "Gastos_${DateFormat('dd-MM-yy').format(fechaInicio)}_al_${DateFormat('dd-MM-yy').format(fechaFin)}.csv";
+      final path = "${directory.path}/$nombreArchivo";
+      
       final file = File(path);
       await file.writeAsString(csvData);
-      
-      // Espera de seguridad
-      await Future.delayed(const Duration(milliseconds: 300));
-      
-      // Comprobamos que el archivo existe antes de compartir
-      if (!await file.exists()) {
-         throw "El archivo no se pudo guardar";
-      }
 
-      // 3. COMPARTIR CON ORIGEN (El truco para iOS)
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // 5. Compartir
       final box = context.findRenderObject() as RenderBox?;
-      
       await Share.shareXFiles(
-        [XFile(path)],
-        text: 'Mis Gastos Exportados',
-        sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size, // <--- ESTO ES VITAL EN IOS
+        [XFile(path)], 
+        text: 'Gastos exportados.',
+        sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
       );
 
     } catch (e) {
@@ -615,7 +651,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 BarChartData(
                   barTouchData: BarTouchData(
                     touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (group) => Colors.blueGrey,
+                      getTooltipColor: (group) => Colors.blueGrey, // <-- ARREGLADO AQUÍ
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         return BarTooltipItem('${rod.toY.toStringAsFixed(2)} €', const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
                       },
