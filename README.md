@@ -1,3 +1,12 @@
+#Futuras mejoras
+
+Poder poner gastos recurrentes
+Pestaña de gráficas circulares con categorías, meses/año, etc. 
+Más categorías
+Marcar objetivos y que te diga cómo vas
+Gastos compartidos (tipo tricount)
+
+
 # 💰 Control de Gastos - Flutter App
 
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
