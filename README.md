@@ -1,5 +1,7 @@
 #Futuras mejoras
 
+Meter ingresos
+Que te muestre el balance total, lo gastado, trayectoria, etc. 
 Poder poner gastos recurrentes
 Pestaña de gráficas circulares con categorías, meses/año, etc. 
 Más categorías
