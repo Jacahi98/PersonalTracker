@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Para cerrar la app si quieren
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+import 'package:local_auth/local_auth.dart'; // <--- NUEVA LIBRERÍA
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,12 +34,126 @@ class MiAppFinanciera extends StatelessWidget {
       supportedLocales: const [Locale('es', 'ES')],
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3F51B5), // Indigo
+          seedColor: const Color(0xFF3F51B5),
           brightness: Brightness.light,
         ),
         useMaterial3: true,
       ),
-      home: const PantallaPrincipal(),
+      // CAMBIO: Ahora la pantalla inicial es el Bloqueo, no la Principal
+      home: const PantallaBloqueo(),
+    );
+  }
+}
+
+// --- PANTALLA DE BLOQUEO (FACE ID / TOUCH ID) ---
+class PantallaBloqueo extends StatefulWidget {
+  const PantallaBloqueo({super.key});
+
+  @override
+  State<PantallaBloqueo> createState() => _PantallaBloqueoState();
+}
+
+class _PantallaBloqueoState extends State<PantallaBloqueo> {
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _estaAutenticando = false;
+  String _estado = "Pulsa para desbloquear";
+
+  @override
+  void initState() {
+    super.initState();
+    // Intentamos autenticar nada más abrir la app
+    _autenticar();
+  }
+
+  Future<void> _autenticar() async {
+    setState(() {
+      _estaAutenticando = true;
+      _estado = "Verificando identidad...";
+    });
+
+    try {
+      // 1. Ver si el móvil tiene hardware (FaceID/Huella)
+      bool puedeCheckear = await auth.canCheckBiometrics || await auth.isDeviceSupported();
+
+      if (!puedeCheckear) {
+        setState(() => _estado = "Tu dispositivo no tiene seguridad biométrica activada.");
+        // Si no tiene FaceID configurado, le dejamos pasar (o podrías bloquearle)
+        await Future.delayed(const Duration(seconds: 2));
+        _irAPrincipal();
+        return;
+      }
+
+      // 2. Pedir la cara/huella
+      bool autenticado = await auth.authenticate(
+        localizedReason: 'Desbloquea para ver tus finanzas',
+        options: const AuthenticationOptions(
+          stickyAuth: true, // Si minimiza la app, sigue pidiendo
+          biometricOnly: true,
+        ),
+      );
+
+      if (autenticado) {
+        _irAPrincipal();
+      } else {
+        setState(() {
+          _estaAutenticando = false;
+          _estado = "No te he reconocido. Inténtalo de nuevo.";
+        });
+      }
+    } on PlatformException catch (e) {
+      setState(() {
+        _estaAutenticando = false;
+        _estado = "Error de seguridad: ${e.message}";
+      });
+    }
+  }
+
+  void _irAPrincipal() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const PantallaPrincipal()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.indigo, // Color de fondo seguro
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.lock_outline, size: 100, color: Colors.white),
+            const SizedBox(height: 30),
+            Text(
+              "App Protegida",
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                color: Colors.white, fontWeight: FontWeight.bold
+              ),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Text(
+                _estado,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ),
+            const SizedBox(height: 40),
+            if (!_estaAutenticando)
+              ElevatedButton.icon(
+                onPressed: _autenticar,
+                icon: const Icon(Icons.face),
+                label: const Text("Usar FaceID / TouchID"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.indigo,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -311,15 +427,12 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     _cargarGastos();
   }
 
-  // --- FUNCIÓN DE EXPORTACIÓN CON FILTRO DE FECHAS ---
   Future<void> _exportarExcel() async {
     try {
-      // 1. Pedir Rango de Fechas (CON LIBERTAD TOTAL)
       final DateTimeRange? rango = await showDateRangePicker(
         context: context,
-        // CAMBIO AQUÍ: Ampliamos los límites
-        firstDate: DateTime(2000),      // Desde el año 2000
-        lastDate: DateTime(2100),       // Hasta el año 2100 (sin límite de "hoy")
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
         currentDate: DateTime.now(),
         saveText: 'EXPORTAR',
         helpText: 'SELECCIONA LAS FECHAS',
@@ -335,10 +448,8 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         },
       );
 
-      // Si cancela, no hacemos nada
       if (rango == null) return;
 
-      // 2. Filtrar
       final fechaInicio = rango.start;
       final fechaFin = rango.end.add(const Duration(hours: 23, minutes: 59, seconds: 59));
 
@@ -354,7 +465,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         return;
       }
 
-      // 3. Crear CSV
       List<List<dynamic>> rows = [];
       rows.add(["Fecha", "Categoría", "Concepto", "Monto"]);
       for (var gasto in gastosFiltrados) {
@@ -368,7 +478,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
       String csvData = const ListToCsvConverter().convert(rows);
 
-      // 4. Guardar
       final directory = await getTemporaryDirectory();
       String nombreArchivo = "Gastos_${DateFormat('dd-MM-yy').format(fechaInicio)}_al_${DateFormat('dd-MM-yy').format(fechaFin)}.csv";
       final path = "${directory.path}/$nombreArchivo";
@@ -378,7 +487,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
       await Future.delayed(const Duration(milliseconds: 300));
 
-      // 5. Compartir
       final box = context.findRenderObject() as RenderBox?;
       await Share.shareXFiles(
         [XFile(path)], 
@@ -651,7 +759,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 BarChartData(
                   barTouchData: BarTouchData(
                     touchTooltipData: BarTouchTooltipData(
-                      getTooltipColor: (group) => Colors.blueGrey, // <-- ARREGLADO AQUÍ
+                      getTooltipColor: (group) => Colors.blueGrey,
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         return BarTooltipItem('${rod.toY.toStringAsFixed(2)} €', const TextStyle(color: Colors.white, fontWeight: FontWeight.bold));
                       },
