@@ -50,6 +50,11 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSFaceIDUsageDescription</key>
-    <string>Necesitamos tu rostro para proteger tus datos financieros.</string>
+	<string>Necesitamos tu rostro para proteger tus finanzas.</string>
+	
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Necesario para guardar o leer archivos CSV.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Necesario para exportar tus datos.</string>
 </dict>
 </plist>
