@@ -89,7 +89,14 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
   final LocalAuthentication auth = LocalAuthentication();
   bool _estaAutenticando = false;
 
-  @override void initState() { super.initState(); _autenticar(); }
+  @override
+void initState() {
+  super.initState();
+  // Esperamos a que la pantalla se dibuje antes de pedir la huella
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _autenticar();
+  });
+}
 
   Future<void> _autenticar() async {
     setState(() => _estaAutenticando = true);
@@ -303,12 +310,12 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           IconButton(icon: Icon(themeNotifier.value == ThemeMode.light ? Icons.dark_mode : Icons.light_mode), onPressed: () => themeNotifier.value = themeNotifier.value == ThemeMode.light ? ThemeMode.dark : ThemeMode.light),
           IconButton(icon: const Icon(Icons.category), tooltip: "Categorías", onPressed: _gestionarCats),
           PopupMenuButton<String>(
-            onSelected: (val) { if(val == 'export') {
-              _exportarCSV();
-            } else if(val == 'import') _importarCSV(); },
+            onSelected: (val) { if(val == 'export') _exportarCSV(); else if(val == 'import') _importarCSV(); },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(value: 'export', child: ListTile(leading: Icon(Icons.upload_file), title: Text('Exportar CSV'))),
-              const PopupMenuItem<String>(value: 'import', child: ListTile(leading: Icon(Icons.download), title: Text('Importar CSV'))), // CORREGIDO ICONO
+              // AQUI ESTABA EL ERROR DE 'const' - ELIMINADO
+              PopupMenuItem<String>(value: 'export', child: ListTile(leading: Icon(Icons.upload_file), title: Text('Exportar CSV'))),
+              // AQUI ESTABA EL ERROR DEL NOMBRE DEL ICONO - CORREGIDO
+              PopupMenuItem<String>(value: 'import', child: ListTile(leading: Icon(Icons.file_download_outlined), title: Text('Importar CSV'))),
             ],
           ),
         ],
@@ -338,9 +345,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   Widget _buildAnalisis() {
     final filtrados = _getMovimientosFiltrados(); final ingresos = filtrados.where((m) => m.esIngreso).fold(0.0, (sum, m) => sum + m.monto); final gastos = filtrados.where((m) => !m.esIngreso).toList();
-    double necesidad = 0, deseo = 0, ahorro = 0; for (var g in gastos) { final cat = _getInfoCategoria(g.categoria); if (cat.macroCategoria == 'Necesidad') {
-      necesidad += g.monto;
-    } else if (cat.macroCategoria == 'Deseo') deseo += g.monto; else if (cat.macroCategoria == 'Ahorro') ahorro += g.monto; else necesidad += g.monto; }
+    double necesidad = 0, deseo = 0, ahorro = 0; for (var g in gastos) { final cat = _getInfoCategoria(g.categoria); if (cat.macroCategoria == 'Necesidad') necesidad += g.monto; else if (cat.macroCategoria == 'Deseo') deseo += g.monto; else if (cat.macroCategoria == 'Ahorro') ahorro += g.monto; else necesidad += g.monto; }
     double base = ingresos > 0 ? ingresos : (necesidad + deseo + ahorro); if (base == 0) base = 1;
     return SingleChildScrollView(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.blue.shade900, Colors.blue.shade600]), borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.blue.withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 5))]), child: Column(children: [Row(mainAxisAlignment: MainAxisAlignment.center, children: [_botonFiltro("Semana"), _botonFiltro("Mes"), _botonFiltro("Año"), IconButton(icon: Icon(Icons.calendar_month, color: _filtroFecha == 'Rango' ? Colors.white : Colors.white54), onPressed: _seleccionarRango)]), const SizedBox(height: 5), Text(_getTituloBalance(), style: const TextStyle(color: Colors.white70, fontSize: 13))])),
@@ -369,7 +374,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   Widget _buildPatrimonioItem(String label, String value, Color color) { return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)), const SizedBox(height: 4), Text(value, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold))]); }
   Widget _buildChartPatrimonio() { List<FlSpot> st = []; List<FlSpot> si = []; for (int i = 0; i < _patrimonio.length; i++) { st.add(FlSpot(i.toDouble(), _patrimonio[i].totalDinero)); si.add(FlSpot(i.toDouble(), _patrimonio[i].dineroInvertido)); } return LineChart(LineChartData(gridData: FlGridData(show: true, drawVerticalLine: false), titlesData: FlTitlesData(bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: true, interval: 1, getTitlesWidget: (val, meta) { int i = val.toInt(); if (i >= 0 && i < _patrimonio.length) return Padding(padding: const EdgeInsets.only(top: 8), child: Text(DateFormat('MMM yy', 'es').format(_patrimonio[i].fecha), style: const TextStyle(fontSize: 10))); return const Text(''); })), leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)), topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)), rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false))), borderData: FlBorderData(show: false), lineBarsData: [LineChartBarData(spots: st, isCurved: true, color: Colors.green, barWidth: 4, dotData: const FlDotData(show: true), belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.1))), LineChartBarData(spots: si, isCurved: true, color: Colors.grey, barWidth: 3, dotData: const FlDotData(show: true), dashArray: [5, 5])])); }
 
-  // --- MODALS ---
   void _agregarOEditarPatrimonio({PatrimonioModelo? patrimonioExistente}) {
     final isEditing = patrimonioExistente != null; final totalCtrl = TextEditingController(text: isEditing ? patrimonioExistente.totalDinero.toString() : ''); final invCtrl = TextEditingController(text: isEditing ? patrimonioExistente.dineroInvertido.toString() : ''); DateTime fecha = isEditing ? patrimonioExistente.fecha : DateTime.now(); double ultimoInvertido = 0.0; if (!isEditing && _patrimonio.isNotEmpty) ultimoInvertido = _patrimonio.last.dineroInvertido;
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (context, setModal) => AlertDialog(title: Text(isEditing ? "Editar Registro" : "Nuevo Registro"), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: totalCtrl, decoration: const InputDecoration(labelText: "Dinero Total (Valor Actual)"), keyboardType: const TextInputType.numberWithOptions(decimal: true)), const SizedBox(height: 10), if (!isEditing) TextField(controller: invCtrl, decoration: InputDecoration(labelText: "Aportado Nuevo (Desde último)", helperText: "Se sumará a: ${ultimoInvertido.toStringAsFixed(0)}€"), keyboardType: const TextInputType.numberWithOptions(decimal: true)) else TextField(controller: invCtrl, decoration: const InputDecoration(labelText: "Dinero Invertido (Total Acumulado)"), keyboardType: const TextInputType.numberWithOptions(decimal: true)), const SizedBox(height: 10), ListTile(title: Text("Fecha: ${DateFormat('dd/MM/yy').format(fecha)}"), trailing: const Icon(Icons.calendar_today), onTap: () async { final p = await showDatePicker(context: context, initialDate: fecha, firstDate: DateTime(2020), lastDate: DateTime.now()); if (p != null) setModal(() => fecha = p); })]), actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancelar")), ElevatedButton(onPressed: () async { if (totalCtrl.text.isEmpty || invCtrl.text.isEmpty) return; double inputInv = double.parse(invCtrl.text.replaceAll(',', '.')); double dinFinal = isEditing ? inputInv : ultimoInvertido + inputInv; final nuevo = PatrimonioModelo(id: isEditing ? patrimonioExistente.id : DateTime.now().millisecondsSinceEpoch.toString(), fecha: fecha, totalDinero: double.parse(totalCtrl.text.replaceAll(',', '.')), dineroInvertido: dinFinal); if (isEditing) {

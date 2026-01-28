@@ -1,7 +1,7 @@
-# 1. Definimos la plataforma mínima (necesario para las librerías nuevas)
+# 1. Definimos la plataforma mínima
 platform :ios, '13.0'
 
-# CocoaPods analytics is not helpful for Flutter apps.
+# Desactivar estadísticas de CocoaPods
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
@@ -31,20 +31,25 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 
-  # 2. El bloque mágico para corregir errores de librerías antiguas
+  # --- INICIO DEL BLOQUE DE CONFIGURACIÓN ---
   post_install do |installer|
     installer.pods_project.targets.each do |target|
       flutter_additional_ios_build_settings(target)
       
       target.build_configurations.each do |config|
-        # Permisividad con errores de punteros y advertencias
+        # Correcciones para Xcode 15/16 y librerías antiguas
         config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
         config.build_settings['CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING'] = 'NO'
         config.build_settings['CLANG_WARN_STRICT_PROTOTYPES'] = 'NO'
         config.build_settings['CLANG_WARN_COMMA'] = 'NO'
         config.build_settings['WARNING_CFLAGS'] ||= []
         config.build_settings['WARNING_CFLAGS'] << '-Wno-incompatible-pointer-types'
+        
+        # SOLUCIÓN CRÍTICA PARA EL CRASH DE FILE_PICKER (FileUtils)
+        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= ['$(inherited)', 'FileUtils=FilePickerFileUtils']
       end
     end
   end
-end
+  # --- FIN DEL BLOQUE DE CONFIGURACIÓN ---
+
+end # <--- ESTE ES EL "END" QUE TE FALTABA
