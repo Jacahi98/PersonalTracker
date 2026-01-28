@@ -1,10 +1,7 @@
 #Futuras mejoras
 
-Meter ingresos
-Que te muestre el balance total, lo gastado, trayectoria, etc. 
+Poner poner dinero inicial. Que aparezca el dinero actual además del balance. 
 Poder poner gastos recurrentes
-Pestaña de gráficas circulares con categorías, meses/año, etc. 
-Más categorías
 Marcar objetivos y que te diga cómo vas
 Gastos compartidos (tipo tricount)
 
