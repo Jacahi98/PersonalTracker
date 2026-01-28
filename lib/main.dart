@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Para cerrar la app si quieren
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -10,7 +10,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
-import 'package:local_auth/local_auth.dart'; // <--- NUEVA LIBRERÍA
+import 'package:local_auth/local_auth.dart';
+
+// --- 1. INTERRUPTOR GLOBAL DE TEMA ---
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,29 +26,56 @@ class MiAppFinanciera extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Control de Gastos',
-      debugShowCheckedModeBanner: false,
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('es', 'ES')],
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3F51B5),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      // CAMBIO: Ahora la pantalla inicial es el Bloqueo, no la Principal
-      home: const PantallaBloqueo(),
+    // --- 2. ESCUCHAMOS EL CAMBIO DE TEMA AQUÍ ---
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (context, currentMode, child) {
+        return MaterialApp(
+          title: 'Control de Gastos',
+          debugShowCheckedModeBanner: false,
+          
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('es', 'ES')],
+
+          // ☀️ TEMA CLARO
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF3F51B5),
+              brightness: Brightness.light,
+            ),
+            useMaterial3: true,
+            scaffoldBackgroundColor: Colors.grey[50], // Fondo claro suave
+            cardColor: Colors.white,
+          ),
+
+          // 🌙 TEMA OSCURO
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF3F51B5),
+              brightness: Brightness.dark,
+            ),
+            useMaterial3: true,
+            // En oscuro, Flutter ajusta el scaffold automáticamente, 
+            // pero podemos forzar tonos agradables si queremos:
+            scaffoldBackgroundColor: const Color(0xFF121212), 
+            cardColor: const Color(0xFF1E1E1E),
+          ),
+
+          // ⚙️ MODO ACTUAL (Controlado por el botón)
+          themeMode: currentMode,
+
+          home: const PantallaBloqueo(),
+        );
+      },
     );
   }
 }
 
-// --- PANTALLA DE BLOQUEO (FACE ID / TOUCH ID) ---
+// --- PANTALLA DE BLOQUEO ---
 class PantallaBloqueo extends StatefulWidget {
   const PantallaBloqueo({super.key});
 
@@ -61,7 +91,6 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
   @override
   void initState() {
     super.initState();
-    // Intentamos autenticar nada más abrir la app
     _autenticar();
   }
 
@@ -72,22 +101,19 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
     });
 
     try {
-      // 1. Ver si el móvil tiene hardware (FaceID/Huella)
       bool puedeCheckear = await auth.canCheckBiometrics || await auth.isDeviceSupported();
 
       if (!puedeCheckear) {
-        setState(() => _estado = "Tu dispositivo no tiene seguridad biométrica activada.");
-        // Si no tiene FaceID configurado, le dejamos pasar (o podrías bloquearle)
+        setState(() => _estado = "Sin seguridad biométrica.");
         await Future.delayed(const Duration(seconds: 2));
         _irAPrincipal();
         return;
       }
 
-      // 2. Pedir la cara/huella
       bool autenticado = await auth.authenticate(
         localizedReason: 'Desbloquea para ver tus finanzas',
         options: const AuthenticationOptions(
-          stickyAuth: true, // Si minimiza la app, sigue pidiendo
+          stickyAuth: true,
           biometricOnly: true,
         ),
       );
@@ -97,13 +123,13 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
       } else {
         setState(() {
           _estaAutenticando = false;
-          _estado = "No te he reconocido. Inténtalo de nuevo.";
+          _estado = "No reconocido. Inténtalo de nuevo.";
         });
       }
     } on PlatformException catch (e) {
       setState(() {
         _estaAutenticando = false;
-        _estado = "Error de seguridad: ${e.message}";
+        _estado = "Error: ${e.message}";
       });
     }
   }
@@ -117,7 +143,7 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.indigo, // Color de fondo seguro
+      backgroundColor: Colors.indigo, 
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -131,20 +157,17 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
               ),
             ),
             const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                _estado,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 16),
-              ),
+            Text(
+              _estado,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 16),
             ),
             const SizedBox(height: 40),
             if (!_estaAutenticando)
               ElevatedButton.icon(
                 onPressed: _autenticar,
                 icon: const Icon(Icons.face),
-                label: const Text("Usar FaceID / TouchID"),
+                label: const Text("Desbloquear"),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: Colors.indigo,
@@ -158,7 +181,7 @@ class _PantallaBloqueoState extends State<PantallaBloqueo> {
   }
 }
 
-// --- GESTOR DE BASE DE DATOS (SQLITE) ---
+// --- DB Y MODELOS ---
 class DB {
   static Database? _database;
 
@@ -170,7 +193,6 @@ class DB {
 
   static Future<Database> _initDB() async {
     String path = p.join(await getDatabasesPath(), 'gastos_pro.db');
-
     return await openDatabase(
       path,
       version: 1,
@@ -210,7 +232,6 @@ class DB {
   }
 }
 
-// --- MODELO ---
 class Gasto {
   String id;
   String titulo;
@@ -218,22 +239,10 @@ class Gasto {
   DateTime fecha;
   String categoria;
 
-  Gasto({
-    required this.id,
-    required this.titulo,
-    required this.monto,
-    required this.fecha,
-    required this.categoria,
-  });
+  Gasto({required this.id, required this.titulo, required this.monto, required this.fecha, required this.categoria});
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'titulo': titulo,
-      'monto': monto,
-      'fecha': fecha.toIso8601String(),
-      'categoria': categoria,
-    };
+    return {'id': id, 'titulo': titulo, 'monto': monto, 'fecha': fecha.toIso8601String(), 'categoria': categoria};
   }
 
   factory Gasto.fromMap(Map<String, dynamic> map) {
@@ -322,7 +331,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                       controller: tituloController,
                       decoration: InputDecoration(labelText: 'Concepto', prefixIcon: const Icon(Icons.edit), border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
                       textCapitalization: TextCapitalization.sentences,
-                      autofocus: true,
                     ),
                     const SizedBox(height: 15),
 
@@ -401,7 +409,6 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                           } else {
                             await DB.insert(nuevoGasto);
                           }
-
                           _cargarGastos();
                           Navigator.of(context).pop();
                         },
@@ -410,7 +417,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
-                        child: const Text('GUARDAR GASTO', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        child: const Text('GUARDAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       ),
                     ),
                   ],
@@ -435,17 +442,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         lastDate: DateTime(2100),
         currentDate: DateTime.now(),
         saveText: 'EXPORTAR',
-        helpText: 'SELECCIONA LAS FECHAS',
-        builder: (context, child) {
-          return Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-            child: child!,
-          );
-        },
+        helpText: 'FECHAS PARA EXCEL',
       );
 
       if (rango == null) return;
@@ -459,40 +456,27 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       }).toList();
 
       if (gastosFiltrados.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No hay gastos en esas fechas para exportar.')),
-        );
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sin datos en esas fechas.')));
         return;
       }
 
       List<List<dynamic>> rows = [];
       rows.add(["Fecha", "Categoría", "Concepto", "Monto"]);
       for (var gasto in gastosFiltrados) {
-        rows.add([
-          DateFormat('yyyy-MM-dd').format(gasto.fecha),
-          gasto.categoria,
-          gasto.titulo,
-          gasto.monto
-        ]);
+        rows.add([DateFormat('yyyy-MM-dd').format(gasto.fecha), gasto.categoria, gasto.titulo, gasto.monto]);
       }
 
       String csvData = const ListToCsvConverter().convert(rows);
-
       final directory = await getTemporaryDirectory();
-      String nombreArchivo = "Gastos_${DateFormat('dd-MM-yy').format(fechaInicio)}_al_${DateFormat('dd-MM-yy').format(fechaFin)}.csv";
+      String nombreArchivo = "Gastos_${DateFormat('dd-MM-yy').format(fechaInicio)}.csv";
       final path = "${directory.path}/$nombreArchivo";
-      
       final file = File(path);
       await file.writeAsString(csvData);
 
       await Future.delayed(const Duration(milliseconds: 300));
-
+      if (!mounted) return;
       final box = context.findRenderObject() as RenderBox?;
-      await Share.shareXFiles(
-        [XFile(path)], 
-        text: 'Gastos exportados.',
-        sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size,
-      );
+      await Share.shareXFiles([XFile(path)], text: 'Mis Gastos Exportados', sharePositionOrigin: box!.localToGlobal(Offset.zero) & box.size);
 
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -504,7 +488,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       context: context,
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 1)),
-      saveText: 'Confirmar',
+      saveText: 'Ver',
     );
     if (picked != null) {
       setState(() {
@@ -520,19 +504,23 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   @override
   Widget build(BuildContext context) {
-    if (_cargando) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    if (_cargando) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
+    // Colores dinámicos según el tema
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBarColor = isDark ? const Color(0xFF2C2C2C) : Colors.white;
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      // Usamos el color de fondo definido en el tema
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      
       appBar: AppBar(
         title: const Text('Mis Finanzas', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.transparent,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.secondary],
+              colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.tertiary],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -540,27 +528,41 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
         ),
         foregroundColor: Colors.white,
         elevation: 0,
-        actions: [IconButton(icon: const Icon(Icons.download), onPressed: _exportarExcel, tooltip: "Descargar Excel")],
+        actions: [
+          // --- 3. BOTÓN DE CAMBIO DE MODO ---
+          IconButton(
+            icon: Icon(themeNotifier.value == ThemeMode.light ? Icons.dark_mode : Icons.light_mode),
+            tooltip: "Cambiar Tema",
+            onPressed: () {
+              if (themeNotifier.value == ThemeMode.light) {
+                themeNotifier.value = ThemeMode.dark;
+              } else {
+                themeNotifier.value = ThemeMode.light;
+              }
+            },
+          ),
+          IconButton(icon: const Icon(Icons.download), onPressed: _exportarExcel, tooltip: "Excel"),
+        ],
       ),
       body: _indiceActual == 0 ? _buildListaGastos() : _buildGraficas(),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _indiceActual,
         onDestinationSelected: (index) => setState(() => _indiceActual = index),
-        elevation: 10,
-        backgroundColor: Colors.white,
+        elevation: 5,
+        backgroundColor: navBarColor, 
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.list_alt_rounded), label: 'Mis Gastos'),
-          NavigationDestination(icon: Icon(Icons.bar_chart_rounded), label: 'Estadísticas'),
+          NavigationDestination(icon: Icon(Icons.list_alt_rounded), label: 'Gastos'),
+          NavigationDestination(icon: Icon(Icons.bar_chart_rounded), label: 'Gráficas'),
         ],
       ),
       floatingActionButton: _indiceActual == 0
           ? FloatingActionButton.extended(
-        onPressed: () => _agregarOEditarGasto(),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text("Añadir"),
-      )
+              onPressed: () => _agregarOEditarGasto(),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add),
+              label: const Text("Añadir"),
+            )
           : null,
     );
   }
@@ -588,6 +590,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
     return Column(
       children: [
+        // Tarjeta de Resumen Mensual
         Container(
           width: double.infinity,
           margin: const EdgeInsets.all(16),
@@ -611,6 +614,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           ),
         ),
 
+        // Lista de Gastos
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -633,8 +637,9 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 child: Card(
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   elevation: 0,
-                  color: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.shade200)),
+                  // Color dinámico de tarjeta (Blanco en día, Gris oscuro en noche)
+                  color: Theme.of(context).cardColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.grey.withOpacity(0.2))),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(12),
                     leading: Container(
@@ -647,7 +652,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                       children: [
                         Text(gasto.categoria, style: TextStyle(color: catInfo.color, fontSize: 12, fontWeight: FontWeight.bold)),
                         const Text(" • ", style: TextStyle(color: Colors.grey)),
-                        Text(DateFormat('dd MMM yyyy', 'es').format(gasto.fecha), style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                        Text(DateFormat('dd MMM', 'es').format(gasto.fecha), style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                       ],
                     ),
                     trailing: Text('-${gasto.monto.toStringAsFixed(2)} €', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.redAccent)),
@@ -723,7 +728,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     if (_vistaGrafica == 'Semana') textoRango = "Esta Semana";
     else if (_vistaGrafica == 'Mes') textoRango = DateFormat('MMMM', 'es').format(hoy).toUpperCase();
     else if (_vistaGrafica == 'Año') textoRango = "Año ${hoy.year}";
-    else textoRango = "${DateFormat('dd/MM/yyyy').format(inicioPeriodo)} - ${DateFormat('dd/MM/yyyy').format(finPeriodo)}";
+    else textoRango = "${DateFormat('dd/MM').format(inicioPeriodo)} - ${DateFormat('dd/MM').format(finPeriodo)}";
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -754,7 +759,8 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           Expanded(
             child: Container(
               padding: const EdgeInsets.only(right: 16, left: 0, top: 10, bottom: 0),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, spreadRadius: 5)]),
+              // Color de fondo de la gráfica adaptable
+              decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10, spreadRadius: 5)]),
               child: BarChart(
                 BarChartData(
                   barTouchData: BarTouchData(
@@ -794,7 +800,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                     rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   ),
                   borderData: FlBorderData(show: false),
-                  gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 50, getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.shade100, strokeWidth: 1)),
+                  gridData: FlGridData(show: true, drawVerticalLine: false, horizontalInterval: 50, getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.2), strokeWidth: 1)),
                   barGroups: List.generate(cantidadBarras, (i) => BarChartGroupData(
                     x: i,
                     barRods: [
@@ -803,7 +809,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                           gradient: LinearGradient(colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.tertiary], begin: Alignment.bottomCenter, end: Alignment.topCenter),
                           width: cantidadBarras > 15 ? 6 : 14,
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
-                          backDrawRodData: BackgroundBarChartRodData(show: true, toY: (datosGrafica.values.isEmpty ? 0 : datosGrafica.values.reduce((curr, next) => curr > next ? curr : next)) * 1.1, color: Colors.grey.shade100)
+                          backDrawRodData: BackgroundBarChartRodData(show: true, toY: (datosGrafica.values.isEmpty ? 0 : datosGrafica.values.reduce((curr, next) => curr > next ? curr : next)) * 1.1, color: Colors.grey.withOpacity(0.1))
                       )
                     ],
                   )),
@@ -832,9 +838,10 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
           }
         },
         selectedColor: Theme.of(context).colorScheme.primaryContainer,
-        labelStyle: TextStyle(color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[700], fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300)),
+        labelStyle: TextStyle(color: isSelected ? Theme.of(context).colorScheme.primary : Colors.grey[600], fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+        // Fondo del botón dinámico
+        backgroundColor: Theme.of(context).cardColor,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.withOpacity(0.3))),
         showCheckmark: false,
       ),
     );
