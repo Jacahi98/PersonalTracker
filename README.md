@@ -1,9 +1,10 @@
 #Futuras mejoras
 
-Poner poner dinero inicial. Que aparezca el dinero actual además del balance. 
-Poder poner gastos recurrentes
-Marcar objetivos y que te diga cómo vas
-Gastos compartidos (tipo tricount)
+- Poner poner dinero inicial. Que aparezca el dinero actual además del balance. 
+- Poder poner gastos recurrentes
+- Marcar objetivos y que te diga cómo vas
+- Gastos compartidos (tipo tricount)
+- Poder poner foto del ticket en el gasto. 
 
 
 # 💰 Control de Gastos - Flutter App
